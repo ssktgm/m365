@@ -4,8 +4,7 @@
 
 ## ファイル構成
 
-- `index.html` - 画面本体（JavaScript をインラインで内蔵）
-- `style.css` - レイアウト・スタイル定義
+- `index.html` - 画面本体（CSS・JavaScript をインラインで内蔵した 1 ファイル完結構成）
 - `sample-config.json` - 読み込み用サンプル設定ファイル
 
 ## 使い方
