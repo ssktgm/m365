@@ -49,3 +49,31 @@ jobs:
         with:
           name: HttpPostTool-Windows
           path: python_tool/dist/HttpPostTool.exe
+
+  release:
+    needs: [build-macos, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: HttpPostTool-macOS
+          path: release_assets
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: HttpPostTool-Windows
+          path: release_assets
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "$TAG" release_assets/HttpPostTool.exe release_assets/HttpPostTool-macOS.zip --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "$TAG" release_assets/HttpPostTool.exe release_assets/HttpPostTool-macOS.zip --repo "${GITHUB_REPOSITORY}" --title "$TAG" --generate-notes
+          fi

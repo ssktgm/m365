@@ -51,3 +51,12 @@ build_win.bat
 ### 方法2: GitHub Actions で自動ビルドする（Windows 端末不要）
 
 リポジトリを GitHub へ push するか、Actions タブから **Build Desktop Apps**（`.github/workflows/build.yml`）を手動実行（`workflow_dispatch`）すると、`HttpPostTool-macOS` と `HttpPostTool-Windows`（`HttpPostTool.exe`）のアーティファクトが生成されます。
+
+#### GitHub Releases への自動公開（ログイン不要・期限なしで配布する場合）
+
+タグを push すると、ビルド完了後にリポジトリの **Releases** ページへ `HttpPostTool.exe` と `HttpPostTool-macOS.zip` が自動添付されます。
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
