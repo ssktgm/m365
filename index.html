@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HTTP POST ツール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title-group">
+      <h1>HTTP POST ツール</h1>
+      <span class="subtitle">変数テンプレート対応・ローカル設定保存</span>
+    </div>
+    <div class="header-controls">
+      <div class="mode-switch" role="group" aria-label="表示モード切替">
+        <button type="button" id="btn-mode-run" class="mode-btn is-active">実行モード</button>
+        <button type="button" id="btn-mode-config" class="mode-btn">設定モード</button>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="btn-save-ls" class="btn btn-secondary" data-config-only hidden>ローカルストレージに保存</button>
+        <button type="button" id="btn-load-ls" class="btn btn-secondary" data-config-only hidden>ローカルストレージから読込</button>
+        <button type="button" id="btn-import-json" class="btn btn-secondary">JSONファイル読込</button>
+        <button type="button" id="btn-export-json" class="btn btn-secondary" data-config-only hidden>JSONエクスポート</button>
+        <button type="button" id="btn-reset" class="btn btn-ghost" data-config-only hidden>リセット</button>
+        <input type="file" id="file-input-json" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </header>
+
+  <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+
+  <main class="layout">
+    <section class="panel request-panel" aria-label="リクエスト設定">
+      <div id="run-view" class="view-stack">
+        <div class="card">
+          <h2 class="card-title">送信先</h2>
+          <div class="run-url-row">
+            <span class="method-badge" aria-label="HTTPメソッド POST">POST</span>
+            <code id="run-url-display" class="run-url-box mono"></code>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">変数</h2>
+          <div id="run-variables-list" class="run-var-list"></div>
+          <p id="run-variables-empty" class="empty-note" hidden>設定された変数がありません。</p>
+          <div id="run-warnings" class="warnings-box run-warnings" hidden></div>
+          <div class="run-actions">
+            <button type="button" id="btn-run-send" class="btn btn-primary btn-run">実行（POST送信）</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="config-view" class="view-stack" hidden>
+        <div class="card">
+          <h2 class="card-title">エンドポイント</h2>
+          <div class="url-row">
+            <span class="method-badge" aria-label="HTTPメソッド POST">POST</span>
+            <input
+              type="url"
+              id="url-input"
+              class="input url-input"
+              placeholder="https://example.com/api/endpoint"
+              autocomplete="off"
+            >
+            <button type="button" id="btn-send" class="btn btn-primary">送信</button>
+          </div>
+          <p class="hint">URL・ヘッダー値・ペイロード内で <code>{{変数名}}</code> を使用できます。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">変数</h2>
+            <button type="button" id="btn-add-var" class="btn btn-small">＋変数追加</button>
+          </div>
+          <div id="variables-list" class="list-container"></div>
+          <p id="variables-empty" class="empty-note" hidden>変数がありません。「＋変数追加」から追加できます。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">ヘッダー</h2>
+            <button type="button" id="btn-add-header" class="btn btn-small">＋ヘッダー追加</button>
+          </div>
+          <div id="headers-list" class="list-container"></div>
+          <p id="headers-empty" class="empty-note" hidden>ヘッダーがありません。</p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">ペイロード</h2>
+          <textarea
+            id="payload-input"
+            class="textarea mono"
+            rows="8"
+            spellcheck="false"
+            placeholder='{\n  "name": "{{name}}"\n}'
+          ></textarea>
+          <p class="hint"><code>{{変数名}}</code> で変数を埋め込めます（JSON文字列の引用符はテンプレート側に記述してください）。</p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">送信プレビュー（変数展開後）</h2>
+          <div class="preview-url-wrap">
+            <span class="preview-label">URL:</span>
+            <code id="preview-url" class="preview-url"></code>
+          </div>
+          <div id="preview-warnings" class="warnings-box" hidden></div>
+          <pre id="payload-preview" class="code-box mono"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel response-panel" aria-label="レスポンス">
+      <div class="card response-card">
+        <div class="card-header">
+          <h2 class="card-title">レスポンス</h2>
+          <div id="response-meta" class="response-meta">
+            <span id="response-status" class="badge">未送信</span>
+            <span id="response-time" class="meta-time"></span>
+          </div>
+        </div>
+
+        <div id="response-error" class="error-box" hidden></div>
+
+        <div class="response-section">
+          <h3 class="section-subtitle">レスポンスヘッダー</h3>
+          <pre id="response-headers" class="code-box mono small-box">（なし）</pre>
+        </div>
+
+        <div class="response-section">
+          <h3 class="section-subtitle">レスポンスボディ</h3>
+          <pre id="response-body" class="code-box mono body-box">送信するとここに結果が表示されます。</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+(function () {
+  "use strict";
+
+  const STORAGE_KEY = "httpPostTool.config";
+  const VAR_PATTERN = /\{\{\s*([\w.-]+)\s*\}\}/g;
+
+  function createDefaultConfig() {
+    return {
+      version: 1,
+      url: "https://httpbin.org/post",
+      headers: [{ key: "Content-Type", value: "application/json" }],
+      payload: '{\n  "name": "{{name}}",\n  "env": "{{env}}"\n}',
+      variables: [
+        { name: "name", type: "text", value: "taro", options: [] },
+        { name: "env", type: "select", value: "dev", options: ["dev", "stg", "prod"] }
+      ]
+    };
+  }
+
+  let state = createDefaultConfig();
+  let bannerTimer = null;
+
+  // DOM references
+  const urlInput = document.getElementById("url-input");
+  const payloadInput = document.getElementById("payload-input");
+  const variablesList = document.getElementById("variables-list");
+  const variablesEmpty = document.getElementById("variables-empty");
+  const headersList = document.getElementById("headers-list");
+  const headersEmpty = document.getElementById("headers-empty");
+  const previewUrl = document.getElementById("preview-url");
+  const previewWarnings = document.getElementById("preview-warnings");
+  const payloadPreview = document.getElementById("payload-preview");
+  const statusBanner = document.getElementById("status-banner");
+  const fileInputJson = document.getElementById("file-input-json");
+
+  const btnSend = document.getElementById("btn-send");
+  const btnAddVar = document.getElementById("btn-add-var");
+  const btnAddHeader = document.getElementById("btn-add-header");
+  const btnSaveLs = document.getElementById("btn-save-ls");
+  const btnLoadLs = document.getElementById("btn-load-ls");
+  const btnImportJson = document.getElementById("btn-import-json");
+  const btnExportJson = document.getElementById("btn-export-json");
+  const btnReset = document.getElementById("btn-reset");
+
+  const responseStatus = document.getElementById("response-status");
+  const responseTime = document.getElementById("response-time");
+  const responseError = document.getElementById("response-error");
+  const responseHeaders = document.getElementById("response-headers");
+  const responseBody = document.getElementById("response-body");
+
+  function showBanner(message, isError) {
+    if (bannerTimer) {
+      clearTimeout(bannerTimer);
+      bannerTimer = null;
+    }
+    statusBanner.textContent = message;
+    statusBanner.classList.toggle("is-error", Boolean(isError));
+    statusBanner.hidden = false;
+    bannerTimer = setTimeout(function () {
+      statusBanner.hidden = true;
+    }, 3500);
+  }
+
+  function normalizeOption(opt) {
+    if (typeof opt === "string") {
+      return { label: opt, value: opt };
+    }
+    if (opt && typeof opt === "object") {
+      const value = opt.value !== undefined ? String(opt.value) : "";
+      const label = opt.label !== undefined ? String(opt.label) : value;
+      return { label: label, value: value };
+    }
+    return null;
+  }
+
+  function serializeOptionsForInput(options) {
+    return (options || [])
+      .map(function (opt) {
+        if (typeof opt === "string") {
+          return opt;
+        }
+        if (opt && typeof opt === "object") {
+          return opt.value !== undefined ? String(opt.value) : "";
+        }
+        return "";
+      })
+      .filter(function (s) {
+        return s.length > 0;
+      })
+      .join(", ");
+  }
+
+  function parseOptionsInput(raw) {
+    return raw
+      .split(",")
+      .map(function (item) {
+        return item.trim();
+      })
+      .filter(function (item) {
+        return item.length > 0;
+      });
+  }
+
+  function validateConfig(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error("設定はJSONオブジェクトである必要があります。");
+    }
+
+    const defaults = createDefaultConfig();
+
+    if (raw.url !== undefined && typeof raw.url !== "string") {
+      throw new Error("url は文字列である必要があります。");
+    }
+    if (raw.payload !== undefined && typeof raw.payload !== "string") {
+      throw new Error("payload は文字列である必要があります。");
+    }
+    if (raw.headers !== undefined && !Array.isArray(raw.headers)) {
+      throw new Error("headers は配列である必要があります。");
+    }
+    if (raw.variables !== undefined && !Array.isArray(raw.variables)) {
+      throw new Error("variables は配列である必要があります。");
+    }
+
+    const headers = (raw.headers !== undefined ? raw.headers : defaults.headers).map(function (h, idx) {
+      if (!h || typeof h !== "object" || Array.isArray(h)) {
+        throw new Error("headers[" + idx + "] はオブジェクトである必要があります。");
+      }
+      if (h.key !== undefined && typeof h.key !== "string") {
+        throw new Error("headers[" + idx + "].key は文字列である必要があります。");
+      }
+      if (h.value !== undefined && typeof h.value !== "string") {
+        throw new Error("headers[" + idx + "].value は文字列である必要があります。");
+      }
+      return {
+        key: h.key || "",
+        value: h.value || ""
+      };
+    });
+
+    const variables = (raw.variables !== undefined ? raw.variables : defaults.variables).map(function (v, idx) {
+      if (!v || typeof v !== "object" || Array.isArray(v)) {
+        throw new Error("variables[" + idx + "] はオブジェクトである必要があります。");
+      }
+      if (v.name !== undefined && typeof v.name !== "string") {
+        throw new Error("variables[" + idx + "].name は文字列である必要があります。");
+      }
+      const type = v.type !== undefined ? v.type : "text";
+      if (type !== "text" && type !== "select") {
+        throw new Error("variables[" + idx + '].type は "text" または "select" である必要があります。');
+      }
+      if (v.options !== undefined && !Array.isArray(v.options)) {
+        throw new Error("variables[" + idx + "].options は配列である必要があります。");
+      }
+
+      const rawOptions = Array.isArray(v.options) ? v.options : [];
+      const cleanOptions = [];
+      for (let i = 0; i < rawOptions.length; i++) {
+        const opt = rawOptions[i];
+        if (typeof opt === "string") {
+          cleanOptions.push(opt);
+        } else if (opt && typeof opt === "object" && !Array.isArray(opt)) {
+          cleanOptions.push({
+            label: opt.label !== undefined ? String(opt.label) : String(opt.value || ""),
+            value: opt.value !== undefined ? String(opt.value) : ""
+          });
+        } else {
+          throw new Error("variables[" + idx + "].options[" + i + "] の型が不正です。");
+        }
+      }
+
+      const value = v.value !== undefined ? String(v.value) : "";
+      return {
+        name: v.name || "",
+        type: type,
+        value: value,
+        options: cleanOptions
+      };
+    });
+
+    return {
+      version: typeof raw.version === "number" ? raw.version : 1,
+      url: raw.url !== undefined ? raw.url : defaults.url,
+      headers: headers,
+      payload: raw.payload !== undefined ? raw.payload : defaults.payload,
+      variables: variables
+    };
+  }
+
+  function buildVariableMap(variables) {
+    const map = Object.create(null);
+    variables.forEach(function (v) {
+      const name = v.name.trim();
+      if (name) {
+        map[name] = v.value;
+      }
+    });
+    return map;
+  }
+
+  function substitute(str, varMap) {
+    return str.replace(VAR_PATTERN, function (match, key) {
+      return Object.prototype.hasOwnProperty.call(varMap, key) ? varMap[key] : match;
+    });
+  }
+
+  function collectUndefinedVars(strings, varMap) {
+    const missing = [];
+    const seen = Object.create(null);
+    strings.forEach(function (str) {
+      const regex = new RegExp(VAR_PATTERN.source, "g");
+      let match;
+      while ((match = regex.exec(str)) !== null) {
+        const key = match[1];
+        if (!Object.prototype.hasOwnProperty.call(varMap, key) && !seen[key]) {
+          seen[key] = true;
+          missing.push(key);
+        }
+      }
+    });
+    return missing;
+  }
+
+  function isJsonContentType(headers, varMap) {
+    return headers.some(function (h) {
+      return (
+        h.key.trim().toLowerCase() === "content-type" &&
+        substitute(h.value, varMap).toLowerCase().includes("json")
+      );
+    });
+  }
+
+  function getVariableValidationStatus() {
+    const counts = Object.create(null);
+    state.variables.forEach(function (v) {
+      const trimmed = v.name.trim();
+      if (trimmed) {
+        counts[trimmed] = (counts[trimmed] || 0) + 1;
+      }
+    });
+    return state.variables.map(function (v) {
+      const trimmed = v.name.trim();
+      if (!trimmed) {
+        return { invalid: true, message: "変数名が空です。" };
+      }
+      if (counts[trimmed] > 1) {
+        return { invalid: true, message: '変数名 "' + trimmed + '" が重複しています。' };
+      }
+      return { invalid: false, message: "" };
+    });
+  }
+
+  function updateVariableRowErrors() {
+    const statuses = getVariableValidationStatus();
+    const rows = variablesList.querySelectorAll(".var-row");
+    rows.forEach(function (row, idx) {
+      const st = statuses[idx];
+      if (!st) return;
+      row.classList.toggle("is-invalid", st.invalid);
+      const errEl = row.querySelector(".var-error-msg");
+      if (errEl) {
+        errEl.textContent = st.message;
+        errEl.hidden = !st.invalid;
+      }
+    });
+  }
+
+  function populateSelectOptions(selectEl, variable) {
+    while (selectEl.firstChild) {
+      selectEl.removeChild(selectEl.firstChild);
+    }
+
+    const normalized = (variable.options || [])
+      .map(normalizeOption)
+      .filter(function (o) {
+        return o !== null;
+      });
+
+    if (normalized.length === 0) {
+      const emptyOpt = document.createElement("option");
+      emptyOpt.value = "";
+      emptyOpt.textContent = "（選択肢なし）";
+      selectEl.appendChild(emptyOpt);
+      variable.value = "";
+      return;
+    }
+
+    let hasCurrent = false;
+    normalized.forEach(function (opt) {
+      const optionEl = document.createElement("option");
+      optionEl.value = opt.value;
+      optionEl.textContent = opt.label;
+      if (opt.value === variable.value) {
+        hasCurrent = true;
+      }
+      selectEl.appendChild(optionEl);
+    });
+
+    if (!hasCurrent) {
+      variable.value = normalized[0].value;
+    }
+    selectEl.value = variable.value;
+  }
+
+  function updatePreview() {
+    const varMap = buildVariableMap(state.variables);
+    const expandedUrl = substitute(state.url, varMap);
+    const expandedPayload = substitute(state.payload, varMap);
+
+    previewUrl.textContent = expandedUrl || "（未入力）";
+    payloadPreview.textContent = expandedPayload;
+
+    const allStrings = [state.url, state.payload].concat(
+      state.headers.map(function (h) {
+        return h.value;
+      })
+    );
+    const missingVars = collectUndefinedVars(allStrings, varMap);
+    const warnings = [];
+
+    if (missingVars.length > 0) {
+      warnings.push("未定義の変数があります: " + missingVars.map(function (v) { return "{{" + v + "}}"; }).join(", "));
+    }
+
+    if (expandedPayload.trim() !== "" && isJsonContentType(state.headers, varMap)) {
+      try {
+        JSON.parse(expandedPayload);
+      } catch (err) {
+        warnings.push("JSON構文エラー（送信自体は可能です）: " + err.message);
+      }
+    }
+
+    while (previewWarnings.firstChild) {
+      previewWarnings.removeChild(previewWarnings.firstChild);
+    }
+
+    if (warnings.length > 0) {
+      const ul = document.createElement("ul");
+      warnings.forEach(function (w) {
+        const li = document.createElement("li");
+        li.textContent = w;
+        ul.appendChild(li);
+      });
+      previewWarnings.appendChild(ul);
+      previewWarnings.hidden = false;
+    } else {
+      previewWarnings.hidden = true;
+    }
+  }
+
+  function renderVariables() {
+    while (variablesList.firstChild) {
+      variablesList.removeChild(variablesList.firstChild);
+    }
+
+    variablesEmpty.hidden = state.variables.length > 0;
+
+    state.variables.forEach(function (variable, index) {
+      const row = document.createElement("div");
+      row.className = "var-row";
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "input";
+      nameInput.placeholder = "変数名";
+      nameInput.value = variable.name;
+      nameInput.setAttribute("aria-label", "変数名");
+      nameInput.addEventListener("input", function () {
+        variable.name = nameInput.value;
+        updateVariableRowErrors();
+        updatePreview();
+      });
+
+      const typeSelect = document.createElement("select");
+      typeSelect.className = "select";
+      typeSelect.setAttribute("aria-label", "変数の種類");
+
+      const optText = document.createElement("option");
+      optText.value = "text";
+      optText.textContent = "テキスト";
+      const optSelect = document.createElement("option");
+      optSelect.value = "select";
+      optSelect.textContent = "選択肢";
+      typeSelect.appendChild(optText);
+      typeSelect.appendChild(optSelect);
+      typeSelect.value = variable.type;
+
+      typeSelect.addEventListener("change", function () {
+        variable.type = typeSelect.value;
+        if (variable.type === "select" && (!Array.isArray(variable.options) || variable.options.length === 0)) {
+          variable.options = variable.value ? [variable.value] : ["option1", "option2"];
+        }
+        renderVariables();
+        updatePreview();
+      });
+
+      let valueControl;
+      if (variable.type === "select") {
+        valueControl = document.createElement("select");
+        valueControl.className = "select";
+        valueControl.setAttribute("aria-label", "変数の値");
+        populateSelectOptions(valueControl, variable);
+        valueControl.addEventListener("change", function () {
+          variable.value = valueControl.value;
+          updatePreview();
+        });
+      } else {
+        valueControl = document.createElement("input");
+        valueControl.type = "text";
+        valueControl.className = "input";
+        valueControl.placeholder = "値";
+        valueControl.value = variable.value;
+        valueControl.setAttribute("aria-label", "変数の値");
+        valueControl.addEventListener("input", function () {
+          variable.value = valueControl.value;
+          updatePreview();
+        });
+      }
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-danger";
+      deleteBtn.textContent = "削除";
+      deleteBtn.addEventListener("click", function () {
+        state.variables.splice(index, 1);
+        renderVariables();
+        updatePreview();
+      });
+
+      row.appendChild(nameInput);
+      row.appendChild(typeSelect);
+      row.appendChild(valueControl);
+      row.appendChild(deleteBtn);
+
+      if (variable.type === "select") {
+        const optionsRow = document.createElement("div");
+        optionsRow.className = "var-row-options";
+
+        const optionsLabel = document.createElement("span");
+        optionsLabel.className = "var-options-label";
+        optionsLabel.textContent = "選択肢 (カンマ区切り):";
+
+        const optionsInput = document.createElement("input");
+        optionsInput.type = "text";
+        optionsInput.className = "input";
+        optionsInput.placeholder = "例: dev, stg, prod";
+        optionsInput.value = serializeOptionsForInput(variable.options);
+        optionsInput.setAttribute("aria-label", "選択肢リスト");
+        optionsInput.addEventListener("input", function () {
+          variable.options = parseOptionsInput(optionsInput.value);
+          populateSelectOptions(valueControl, variable);
+          updatePreview();
+        });
+
+        optionsRow.appendChild(optionsLabel);
+        optionsRow.appendChild(optionsInput);
+        row.appendChild(optionsRow);
+      }
+
+      const errEl = document.createElement("div");
+      errEl.className = "var-error-msg";
+      errEl.hidden = true;
+      row.appendChild(errEl);
+
+      variablesList.appendChild(row);
+    });
+
+    updateVariableRowErrors();
+  }
+
+  function renderHeaders() {
+    while (headersList.firstChild) {
+      headersList.removeChild(headersList.firstChild);
+    }
+
+    headersEmpty.hidden = state.headers.length > 0;
+
+    state.headers.forEach(function (header, index) {
+      const row = document.createElement("div");
+      row.className = "header-row";
+
+      const keyInput = document.createElement("input");
+      keyInput.type = "text";
+      keyInput.className = "input";
+      keyInput.placeholder = "Header Key (例: Content-Type)";
+      keyInput.value = header.key;
+      keyInput.setAttribute("aria-label", "ヘッダー名");
+      keyInput.addEventListener("input", function () {
+        header.key = keyInput.value;
+        updatePreview();
+      });
+
+      const valInput = document.createElement("input");
+      valInput.type = "text";
+      valInput.className = "input";
+      valInput.placeholder = "Header Value (例: application/json)";
+      valInput.value = header.value;
+      valInput.setAttribute("aria-label", "ヘッダー値");
+      valInput.addEventListener("input", function () {
+        header.value = valInput.value;
+        updatePreview();
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn btn-danger";
+      deleteBtn.textContent = "削除";
+      deleteBtn.addEventListener("click", function () {
+        state.headers.splice(index, 1);
+        renderHeaders();
+        updatePreview();
+      });
+
+      row.appendChild(keyInput);
+      row.appendChild(valInput);
+      row.appendChild(deleteBtn);
+      headersList.appendChild(row);
+    });
+  }
+
+  function render() {
+    urlInput.value = state.url;
+    payloadInput.value = state.payload;
+    renderVariables();
+    renderHeaders();
+    updatePreview();
+  }
+
+  function resetResponseDisplay() {
+    responseStatus.textContent = "送信中...";
+    responseStatus.className = "badge";
+    responseTime.textContent = "";
+    responseError.hidden = true;
+    responseError.textContent = "";
+    responseHeaders.textContent = "（待機中）";
+    responseBody.textContent = "（待機中）";
+  }
+
+  async function send() {
+    const varMap = buildVariableMap(state.variables);
+    const targetUrl = substitute(state.url, varMap).trim();
+
+    if (!targetUrl) {
+      showBanner("URLを入力してください。", true);
+      urlInput.focus();
+      return;
+    }
+
+    const requestHeaders = {};
+    state.headers.forEach(function (h) {
+      const k = h.key.trim();
+      if (k) {
+        requestHeaders[k] = substitute(h.value, varMap);
+      }
+    });
+
+    const body = substitute(state.payload, varMap);
+
+    btnSend.disabled = true;
+    resetResponseDisplay();
+    const startTime = performance.now();
+
+    try {
+      const res = await fetch(targetUrl, {
+        method: "POST",
+        headers: requestHeaders,
+        body: body
+      });
+      const elapsed = Math.round(performance.now() - startTime);
+
+      responseStatus.textContent = res.status + " " + (res.statusText || "");
+      responseStatus.className = "badge " + (res.ok ? "is-ok" : "is-error");
+      responseTime.textContent = elapsed + " ms";
+
+      const headerLines = [];
+      res.headers.forEach(function (val, key) {
+        headerLines.push(key + ": " + val);
+      });
+      responseHeaders.textContent = headerLines.length > 0 ? headerLines.join("\n") : "（なし）";
+
+      const rawText = await res.text();
+      if (!rawText) {
+        responseBody.textContent = "（空のレスポンス）";
+      } else {
+        try {
+          const parsed = JSON.parse(rawText);
+          responseBody.textContent = JSON.stringify(parsed, null, 2);
+        } catch (_jsonErr) {
+          responseBody.textContent = rawText;
+        }
+      }
+    } catch (err) {
+      const elapsed = Math.round(performance.now() - startTime);
+      responseStatus.textContent = "エラー";
+      responseStatus.className = "badge is-error";
+      responseTime.textContent = elapsed + " ms";
+      responseHeaders.textContent = "（なし）";
+      responseBody.textContent = "";
+
+      if (err instanceof TypeError) {
+        responseError.textContent =
+          "ネットワークエラー / CORSの可能性\n詳細: " + err.message;
+      } else {
+        responseError.textContent = "リクエストに失敗しました: " + (err && err.message ? err.message : String(err));
+      }
+      responseError.hidden = false;
+    } finally {
+      btnSend.disabled = false;
+    }
+  }
+
+  function saveToLocalStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      showBanner("保存しました", false);
+    } catch (err) {
+      showBanner("ローカルストレージへの保存に失敗しました: " + err.message, true);
+    }
+  }
+
+  function loadFromLocalStorage(silentIfMissing) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        if (!silentIfMissing) {
+          showBanner("ローカルストレージに保存された設定がありません。", true);
+        }
+        return false;
+      }
+      const parsed = JSON.parse(raw);
+      state = validateConfig(parsed);
+      render();
+      if (!silentIfMissing) {
+        showBanner("ローカルストレージから設定を読み込みました", false);
+      }
+      return true;
+    } catch (err) {
+      if (!silentIfMissing) {
+        alert("ローカルストレージの設定読み込みに失敗しました: " + err.message);
+      }
+      return false;
+    }
+  }
+
+  function exportConfigJson() {
+    const jsonText = JSON.stringify(state, null, 2);
+    const blob = new Blob([jsonText], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "post-config.json";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showBanner("post-config.json をエクスポートしました", false);
+  }
+
+  function handleImportFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        state = validateConfig(parsed);
+        render();
+        showBanner("JSONファイルから設定を読み込みました", false);
+      } catch (err) {
+        alert("JSONファイルの読み込みに失敗しました: " + err.message);
+      } finally {
+        fileInputJson.value = "";
+      }
+    };
+    reader.onerror = function () {
+      alert("ファイルの読み取り中にエラーが発生しました。");
+      fileInputJson.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  // Event bindings
+  urlInput.addEventListener("input", function () {
+    state.url = urlInput.value;
+    updatePreview();
+  });
+
+  payloadInput.addEventListener("input", function () {
+    state.payload = payloadInput.value;
+    updatePreview();
+  });
+
+  btnAddVar.addEventListener("click", function () {
+    state.variables.push({
+      name: "",
+      type: "text",
+      value: "",
+      options: []
+    });
+    renderVariables();
+    updatePreview();
+    const lastRowInput = variablesList.querySelector(".var-row:last-child input");
+    if (lastRowInput) {
+      lastRowInput.focus();
+    }
+  });
+
+  btnAddHeader.addEventListener("click", function () {
+    state.headers.push({ key: "", value: "" });
+    renderHeaders();
+    updatePreview();
+  });
+
+  btnSend.addEventListener("click", send);
+  btnSaveLs.addEventListener("click", saveToLocalStorage);
+  btnLoadLs.addEventListener("click", function () {
+    loadFromLocalStorage(false);
+  });
+  btnImportJson.addEventListener("click", function () {
+    fileInputJson.click();
+  });
+  fileInputJson.addEventListener("change", handleImportFile);
+  btnExportJson.addEventListener("click", exportConfigJson);
+  btnReset.addEventListener("click", function () {
+    state = createDefaultConfig();
+    render();
+    showBanner("設定を初期状態にリセットしました", false);
+  });
+
+  // Initial load
+  if (!loadFromLocalStorage(true)) {
+    state = createDefaultConfig();
+    render();
+  }
+})();
+  </script>
+</body>
+</html>

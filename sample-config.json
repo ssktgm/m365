@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "url": "https://httpbin.org/post",
+  "headers": [
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    }
+  ],
+  "payload": "{\n  \"name\": \"{{name}}\",\n  \"env\": \"{{env}}\"\n}",
+  "variables": [
+    {
+      "name": "name",
+      "type": "text",
+      "value": "taro",
+      "options": []
+    },
+    {
+      "name": "env",
+      "type": "select",
+      "value": "dev",
+      "options": [
+        "dev",
+        "stg",
+        "prod"
+      ]
+    }
+  ]
+}
