@@ -17,25 +17,30 @@ from typing import Any
 import urllib.error
 import urllib.request
 
-VAR_PATTERN = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
+VAR_PATTERN = re.compile(r"\{\{\s*([^\s{}]+)\s*\}\}")
 APP_DIR_NAME = "HttpPostTool"
 CONFIG_FILE_NAME = "config.json"
 
 
+def _create_half_hour_options() -> list[str]:
+    """00:00〜23:30 の30分刻み時刻リスト（全48件）を返す。"""
+    return [f"{hour:02d}:{minute:02d}" for hour in range(24) for minute in (0, 30)]
+
+
 def create_default_config() -> dict[str, Any]:
-    """デフォルト設定（sample-config.json と互換）を返す。"""
+    """デフォルト設定（Power Automate Webhook トリガ向け・sample-config.json と互換）を返す。"""
     return {
         "version": 1,
-        "url": "https://httpbin.org/post",
+        "url": "https://prod-00.japaneast.logic.azure.com:443/workflows/<workflow-id>/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=<signature>",
         "headers": [{"key": "Content-Type", "value": "application/json"}],
-        "payload": '{\n  "name": "{{name}}",\n  "env": "{{env}}"\n}',
+        "payload": '{\n  "name": "{{名前}}",\n  "time": "{{時刻}}"\n}',
         "variables": [
-            {"name": "name", "type": "text", "value": "taro", "options": []},
+            {"name": "名前", "type": "text", "value": "山田 太郎", "options": []},
             {
-                "name": "env",
+                "name": "時刻",
                 "type": "select",
-                "value": "dev",
-                "options": ["dev", "stg", "prod"],
+                "value": "18:00",
+                "options": _create_half_hour_options(),
             },
         ],
     }

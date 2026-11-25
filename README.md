@@ -46,3 +46,7 @@ python3 -m http.server 8000
 ## Python デスクトップ版（macOS `.app` / Windows `.exe`）
 
 HTML 版と同等の機能を持つ Python デスクトップアプリおよびパッケージング手順は [python_tool/README.md](python_tool/README.md) を参照してください。
+
+## Python デスクトップ版（macOS `.app` / Windows `.exe`）
+
+HTML 版と同等の機能を持つ Python デスクトップアプリおよびパッケージング手順は [python_tool/README.md](python_tool/README.md) を参照してください。

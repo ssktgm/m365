@@ -1,28 +1,73 @@
 {
   "version": 1,
-  "url": "https://httpbin.org/post",
+  "url": "https://prod-00.japaneast.logic.azure.com:443/workflows/<workflow-id>/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=<signature>",
   "headers": [
     {
       "key": "Content-Type",
       "value": "application/json"
     }
   ],
-  "payload": "{\n  \"name\": \"{{name}}\",\n  \"env\": \"{{env}}\"\n}",
+  "payload": "{\n  \"name\": \"{{名前}}\",\n  \"time\": \"{{時刻}}\"\n}",
   "variables": [
     {
-      "name": "name",
+      "name": "名前",
       "type": "text",
-      "value": "taro",
+      "value": "山田 太郎",
       "options": []
     },
     {
-      "name": "env",
+      "name": "時刻",
       "type": "select",
-      "value": "dev",
+      "value": "18:00",
       "options": [
-        "dev",
-        "stg",
-        "prod"
+        "00:00",
+        "00:30",
+        "01:00",
+        "01:30",
+        "02:00",
+        "02:30",
+        "03:00",
+        "03:30",
+        "04:00",
+        "04:30",
+        "05:00",
+        "05:30",
+        "06:00",
+        "06:30",
+        "07:00",
+        "07:30",
+        "08:00",
+        "08:30",
+        "09:00",
+        "09:30",
+        "10:00",
+        "10:30",
+        "11:00",
+        "11:30",
+        "12:00",
+        "12:30",
+        "13:00",
+        "13:30",
+        "14:00",
+        "14:30",
+        "15:00",
+        "15:30",
+        "16:00",
+        "16:30",
+        "17:00",
+        "17:30",
+        "18:00",
+        "18:30",
+        "19:00",
+        "19:30",
+        "20:00",
+        "20:30",
+        "21:00",
+        "21:30",
+        "22:00",
+        "22:30",
+        "23:00",
+        "23:30"
       ]
     }
   ]

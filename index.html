@@ -141,25 +141,48 @@
   "use strict";
 
   const STORAGE_KEY = "httpPostTool.config";
-  const VAR_PATTERN = /\{\{\s*([\w.-]+)\s*\}\}/g;
+  const VAR_PATTERN = /\{\{\s*([^\s{}]+)\s*\}\}/g;
+
+  function createHalfHourOptions() {
+    const options = [];
+    for (let h = 0; h < 24; h++) {
+      const hh = String(h).padStart(2, "0");
+      options.push(hh + ":00");
+      options.push(hh + ":30");
+    }
+    return options;
+  }
 
   function createDefaultConfig() {
     return {
       version: 1,
-      url: "https://httpbin.org/post",
+      url: "https://prod-00.japaneast.logic.azure.com:443/workflows/<workflow-id>/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=<signature>",
       headers: [{ key: "Content-Type", value: "application/json" }],
-      payload: '{\n  "name": "{{name}}",\n  "env": "{{env}}"\n}',
+      payload: '{\n  "name": "{{名前}}",\n  "time": "{{時刻}}"\n}',
       variables: [
-        { name: "name", type: "text", value: "taro", options: [] },
-        { name: "env", type: "select", value: "dev", options: ["dev", "stg", "prod"] }
+        { name: "名前", type: "text", value: "山田 太郎", options: [] },
+        { name: "時刻", type: "select", value: "18:00", options: createHalfHourOptions() }
       ]
     };
   }
 
   let state = createDefaultConfig();
+  let mode = "run";
   let bannerTimer = null;
 
   // DOM references
+  const btnModeRun = document.getElementById("btn-mode-run");
+  const btnModeConfig = document.getElementById("btn-mode-config");
+  const runView = document.getElementById("run-view");
+  const configView = document.getElementById("config-view");
+  const configOnlyButtons = document.querySelectorAll("[data-config-only]");
+
+  const runUrlDisplay = document.getElementById("run-url-display");
+  const runVariablesList = document.getElementById("run-variables-list");
+  const runVariablesEmpty = document.getElementById("run-variables-empty");
+  const runWarnings = document.getElementById("run-warnings");
+  const btnRunSend = document.getElementById("btn-run-send");
+
   const urlInput = document.getElementById("url-input");
   const payloadInput = document.getElementById("payload-input");
   const variablesList = document.getElementById("variables-list");
@@ -440,6 +463,87 @@
     selectEl.value = variable.value;
   }
 
+  function updateRunSummary() {
+    const varMap = buildVariableMap(state.variables);
+    const expandedUrl = substitute(state.url, varMap);
+    runUrlDisplay.textContent = expandedUrl || "（未入力）";
+
+    const allStrings = [state.url, state.payload].concat(
+      state.headers.map(function (h) {
+        return h.value;
+      })
+    );
+    const missingVars = collectUndefinedVars(allStrings, varMap);
+
+    while (runWarnings.firstChild) {
+      runWarnings.removeChild(runWarnings.firstChild);
+    }
+
+    if (missingVars.length > 0) {
+      const msg = document.createElement("div");
+      msg.textContent =
+        "未定義の変数があります: " +
+        missingVars.map(function (v) { return "{{" + v + "}}"; }).join(", ");
+      runWarnings.appendChild(msg);
+      runWarnings.hidden = false;
+    } else {
+      runWarnings.hidden = true;
+    }
+  }
+
+  function renderRunVariables() {
+    while (runVariablesList.firstChild) {
+      runVariablesList.removeChild(runVariablesList.firstChild);
+    }
+
+    runVariablesEmpty.hidden = state.variables.length > 0;
+
+    state.variables.forEach(function (variable, idx) {
+      const row = document.createElement("div");
+      row.className = "run-var-row";
+
+      const labelEl = document.createElement("label");
+      labelEl.className = "run-var-label";
+      const controlId = "run-var-input-" + idx;
+      labelEl.setAttribute("for", controlId);
+      labelEl.textContent = variable.name.trim() || "（未設定）";
+
+      let valueControl;
+      if (variable.type === "select") {
+        valueControl = document.createElement("select");
+        valueControl.className = "select";
+        valueControl.id = controlId;
+        populateSelectOptions(valueControl, variable);
+        valueControl.addEventListener("change", function () {
+          variable.value = valueControl.value;
+          updateRunSummary();
+          updatePreview();
+        });
+      } else {
+        valueControl = document.createElement("input");
+        valueControl.type = "text";
+        valueControl.className = "input";
+        valueControl.id = controlId;
+        valueControl.value = variable.value;
+        valueControl.placeholder = "値を入力";
+        valueControl.addEventListener("input", function () {
+          variable.value = valueControl.value;
+          updateRunSummary();
+          updatePreview();
+        });
+      }
+
+      row.appendChild(labelEl);
+      row.appendChild(valueControl);
+      runVariablesList.appendChild(row);
+    });
+  }
+
+  function renderRunView() {
+    renderRunVariables();
+    updateRunSummary();
+  }
+
   function updatePreview() {
     const varMap = buildVariableMap(state.variables);
     const expandedUrl = substitute(state.url, varMap);
@@ -507,6 +611,7 @@
         variable.name = nameInput.value;
         updateVariableRowErrors();
         updatePreview();
+        updateRunSummary();
       });
 
       const typeSelect = document.createElement("select");
@@ -530,6 +635,7 @@
         }
         renderVariables();
         updatePreview();
+        updateRunSummary();
       });
 
       let valueControl;
@@ -541,6 +647,7 @@
         valueControl.addEventListener("change", function () {
           variable.value = valueControl.value;
           updatePreview();
+          updateRunSummary();
         });
       } else {
         valueControl = document.createElement("input");
@@ -552,6 +659,7 @@
         valueControl.addEventListener("input", function () {
           variable.value = valueControl.value;
           updatePreview();
+          updateRunSummary();
         });
       }
 
@@ -562,6 +670,7 @@
       deleteBtn.addEventListener("click", function () {
         state.variables.splice(index, 1);
         renderVariables();
+        renderRunView();
         updatePreview();
       });
 
@@ -588,6 +697,7 @@
           variable.options = parseOptionsInput(optionsInput.value);
           populateSelectOptions(valueControl, variable);
           updatePreview();
+          updateRunSummary();
         });
 
         optionsRow.appendChild(optionsLabel);
@@ -626,6 +736,7 @@
       keyInput.addEventListener("input", function () {
         header.key = keyInput.value;
         updatePreview();
+        updateRunSummary();
       });
 
       const valInput = document.createElement("input");
@@ -637,6 +748,7 @@
       valInput.addEventListener("input", function () {
         header.value = valInput.value;
         updatePreview();
+        updateRunSummary();
       });
 
       const deleteBtn = document.createElement("button");
@@ -647,6 +759,7 @@
         state.headers.splice(index, 1);
         renderHeaders();
         updatePreview();
+        updateRunSummary();
       });
 
       row.appendChild(keyInput);
@@ -662,6 +775,28 @@
     renderVariables();
     renderHeaders();
     updatePreview();
+    renderRunView();
+  }
+
+  function setMode(nextMode) {
+    mode = nextMode === "config" ? "config" : "run";
+    const isConfig = mode === "config";
+
+    btnModeRun.classList.toggle("is-active", !isConfig);
+    btnModeConfig.classList.toggle("is-active", isConfig);
+
+    runView.hidden = isConfig;
+    configView.hidden = !isConfig;
+
+    configOnlyButtons.forEach(function (el) {
+      el.hidden = !isConfig;
+    });
+
+    if (isConfig) {
+      render();
+    } else {
+      renderRunView();
+    }
   }
 
   function resetResponseDisplay() {
@@ -679,8 +814,10 @@
     const targetUrl = substitute(state.url, varMap).trim();
 
     if (!targetUrl) {
-      showBanner("URLを入力してください。", true);
-      urlInput.focus();
+      showBanner("URLが未設定です。設定モードでURLを入力してください。", true);
+      if (mode === "config") {
+        urlInput.focus();
+      }
       return;
     }
 
@@ -695,6 +832,7 @@
     const body = substitute(state.payload, varMap);
 
     btnSend.disabled = true;
+    btnRunSend.disabled = true;
     resetResponseDisplay();
     const startTime = performance.now();
 
@@ -744,6 +882,7 @@
       responseError.hidden = false;
     } finally {
       btnSend.disabled = false;
+      btnRunSend.disabled = false;
     }
   }
 
@@ -820,14 +959,23 @@
   }
 
   // Event bindings
+  btnModeRun.addEventListener("click", function () {
+    setMode("run");
+  });
+  btnModeConfig.addEventListener("click", function () {
+    setMode("config");
+  });
+
   urlInput.addEventListener("input", function () {
     state.url = urlInput.value;
     updatePreview();
+    updateRunSummary();
   });
 
   payloadInput.addEventListener("input", function () {
     state.payload = payloadInput.value;
     updatePreview();
+    updateRunSummary();
   });
 
   btnAddVar.addEventListener("click", function () {
@@ -838,6 +986,7 @@
       options: []
     });
     renderVariables();
+    renderRunView();
     updatePreview();
     const lastRowInput = variablesList.querySelector(".var-row:last-child input");
     if (lastRowInput) {
@@ -849,9 +998,11 @@
     state.headers.push({ key: "", value: "" });
     renderHeaders();
     updatePreview();
+    updateRunSummary();
   });
 
   btnSend.addEventListener("click", send);
+  btnRunSend.addEventListener("click", send);
   btnSaveLs.addEventListener("click", saveToLocalStorage);
   btnLoadLs.addEventListener("click", function () {
     loadFromLocalStorage(false);
@@ -872,6 +1023,7 @@
     state = createDefaultConfig();
     render();
   }
+  setMode("run");
 })();
   </script>
 </body>
